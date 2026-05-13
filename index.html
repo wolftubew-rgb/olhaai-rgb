@@ -38,10 +38,10 @@
         .logo i { color: #ff4757; font-size: 32px; animation: pulse 2s infinite; }
         @keyframes pulse {
             0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        .logo span:first-child { background: linear-gradient(135deg, #ff4757, #ff6b81); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .logo span:first-child { background: linear-gradient(135deg, #ff4757, #ff6b81); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .logo span:last-child { color: white; }
         
         .nav-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -231,6 +231,7 @@
             .admin-stats { flex-direction: column; }
             .world-comments-form { flex-direction: column; }
             .world-comments-name { width: 100%; }
+            .header { padding: 15px; }
         }
     </style>
 </head>
@@ -310,6 +311,7 @@
             </div>
         </div>
 
+        <!-- COMENTÁRIOS MUNDIAIS -->
         <div class="world-comments">
             <h3><i class="fas fa-globe-americas"></i> 🌍 COMENTÁRIOS MUNDIAIS</h3>
             <p style="margin-bottom: 15px;">Converse com pessoas do mundo todo! Deixe sua mensagem global.</p>
@@ -335,6 +337,7 @@
         <div><a onclick="mostrarPolitica()">Política</a> <a onclick="mostrarTermos()">Termos</a> <a onclick="mostrarContato()">Contato</a></div>
     </div>
 
+    <!-- MODAIS -->
     <div class="modal" id="ageModal"><div class="modal-content"><i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #ff4757;"></i><h2>🔞 Verificação</h2><p>Você tem 18 anos ou mais?</p><button class="btn-primary" onclick="verifyAge(true)">✅ SIM</button><button class="btn-danger" onclick="verifyAge(false)">❌ NÃO</button></div></div>
     <div class="modal hidden" id="loginModal"><div class="login-box"><i class="fas fa-user-circle" style="font-size: 48px; color: #ff4757;"></i><h2>Login</h2><input type="email" id="loginEmail" placeholder="Email"><input type="password" id="loginPassword" placeholder="Senha"><button class="btn-primary" onclick="fazerLogin()">Entrar</button><button class="btn-secondary" onclick="fecharLogin()">Fechar</button></div></div>
     <div class="modal hidden" id="registerModal"><div class="login-box"><i class="fas fa-user-plus" style="font-size: 48px; color: #00b894;"></i><h2>Cadastro</h2><input type="text" id="regName" placeholder="Nome"><input type="email" id="regEmail" placeholder="Email"><input type="password" id="regPassword" placeholder="Senha"><select id="regType"><option value="user">Usuário</option><option value="creator">Criador</option></select><button class="btn-primary" onclick="fazerCadastro()">Cadastrar</button><button class="btn-secondary" onclick="fecharCadastro()">Fechar</button></div></div>
@@ -426,255 +429,6 @@
 
         async function fazerLogin() {
             const email = document.getElementById('loginEmail').value;
-            const senha = document.getElementById('loginPassword').value;
-            if (!email || !senha) { alert('Preencha email e senha!'); return; }
-            try {
-                const userDoc = await db.collection('usuarios').doc(email).get();
-                if (userDoc.exists && userDoc.data().password === senha) {
-                    usuarioAtual = userDoc.data();
-                    localStorage.setItem('usuario', JSON.stringify(usuarioAtual));
-                    alert(`Bem-vindo, ${usuarioAtual.name}!`);
-                    document.querySelectorAll('.nav-buttons button').forEach(btn => { if (btn.id !== 'logoutBtn') btn.style.display = 'none'; });
-                    document.getElementById('logoutBtn').style.display = 'inline-flex';
-                    if (usuarioAtual.type === 'creator' || usuarioAtual.type === 'admin') { document.getElementById('uploadBtn').style.display = 'inline-flex'; }
-                    if (usuarioAtual.type === 'admin') { document.getElementById('adminBtn').style.display = 'inline-flex'; }
-                    fecharLogin();
-                    carregarVideos();
-                    carregarComentariosMundiais();
-                } else { alert('Email ou senha incorretos!'); }
-            } catch (error) { alert('Erro: ' + error.message); }
-        }
-
-        async function fazerCadastro() {
-            const name = document.getElementById('regName').value;
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
-            const type = document.getElementById('regType').value;
-            if (!name || !email || !password) { alert('Preencha todos os campos!'); return; }
-            try {
-                const userDoc = await db.collection('usuarios').doc(email).get();
-                if (userDoc.exists) { alert('Email já cadastrado!'); return; }
-                await db.collection('usuarios').doc(email).set({ email, password, name, type });
-                alert('Cadastro realizado! Faça login.');
-                fecharCadastro();
-            } catch (error) { alert('Erro: ' + error.message); }
-        }
-
-        function logout() {
-            usuarioAtual = null;
-            localStorage.removeItem('usuario');
-            document.querySelectorAll('.nav-buttons button').forEach(btn => { if (btn.id !== 'logoutBtn') btn.style.display = 'inline-flex'; });
-            document.getElementById('logoutBtn').style.display = 'none';
-            document.getElementById('adminBtn').style.display = 'none';
-            document.getElementById('uploadBtn').style.display = 'none';
-            document.getElementById('adminSection').classList.remove('show');
-            document.getElementById('uploadSection').classList.remove('show');
-            mostrarLogin();
-        }
-
-        async function publicarVideo() {
-            const titulo = document.getElementById('videoTitle').value;
-            let link = document.getElementById('videoUrl').value;
-            const descricao = document.getElementById('videoDesc').value;
-            if (!titulo) { alert('Digite um título!'); return; }
-            if (!link) { alert('Cole o link do Google Drive!'); return; }
-            if (!usuarioAtual) { alert('Faça login primeiro!'); return; }
-            if (usuarioAtual.type !== 'creator' && usuarioAtual.type !== 'admin') { alert('Apenas criadores podem postar vídeos!'); return; }
-            let embedUrl = link;
-            if (link.includes('drive.google.com')) {
-                let fileId = '';
-                if (link.includes('/file/d/')) { fileId = link.split('/file/d/')[1].split('/')[0]; }
-                else if (link.includes('id=')) { fileId = link.split('id=')[1].split('&')[0]; }
-                if (fileId) embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
-            }
-            const video = { title: titulo, url: embedUrl, thumbnail: currentThumbnailBase64 || '', description: descricao || 'Sem descrição', author: usuarioAtual.name, authorEmail: usuarioAtual.email, date: new Date().toISOString(), views: 0 };
-            try {
-                await db.collection('videos').add(video);
-                alert('✅ Vídeo publicado!');
-                document.getElementById('videoTitle').value = '';
-                document.getElementById('videoUrl').value = '';
-                document.getElementById('videoDesc').value = '';
-                removeThumbnail();
-                carregarVideos();
-                document.getElementById('uploadSection').classList.remove('show');
-            } catch (error) { alert('Erro: ' + error.message); }
-        }
-
-        async function carregarVideos() {
-            try {
-                document.getElementById('syncStatus').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Carregando...';
-                const snapshot = await db.collection('videos').orderBy('date', 'desc').get();
-                const videos = [];
-                snapshot.forEach(doc => { videos.push({ docId: doc.id, ...doc.data() }); });
-                const grid = document.getElementById('videosGrid');
-                if (videos.length === 0) { grid.innerHTML = '<p style="text-align:center;">🎬 Nenhum vídeo ainda</p>'; }
-                else {
-                    grid.innerHTML = videos.map(video => `
-                        <div class="video-card" onclick="abrirVideoModal('${video.docId}')">
-                            <div class="video-thumbnail" style="background-image: url('${video.thumbnail || 'https://via.placeholder.com/320x200/ff4757/ffffff?text=Olha+A%C3%AD'}');">
-                                ${!video.thumbnail ? '<i class="fas fa-play-circle"></i>' : ''}
-                            </div>
-                            <div class="video-info">
-                                <div class="video-title">${escapeHtml(video.title)}</div>
-                                <div class="video-meta">
-                                    <div><i class="fas fa-user"></i> ${escapeHtml(video.author)}</div>
-                                    <div><i class="fas fa-eye"></i> ${video.views || 0} views</div>
-                                </div>
-                                ${usuarioAtual && (usuarioAtual.email === video.authorEmail || usuarioAtual.type === 'admin') ? 
-                                    `<button class="delete-video-btn" onclick="event.stopPropagation(); excluirVideo('${video.docId}')"><i class="fas fa-trash"></i> Excluir</button>` : ''}
-                            </div>
-                        </div>
-                    `).join('');
-                }
-                document.getElementById('syncStatus').innerHTML = '<i class="fas fa-check-circle"></i> Sincronizado';
-                setTimeout(() => { document.getElementById('syncStatus').innerHTML = '<i class="fas fa-cloud"></i> Nuvem'; }, 2000);
-            } catch (error) { console.error('Erro:', error); document.getElementById('syncStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro'; }
-        }
-
-        async function carregarComentariosMundiais() {
-            try {
-                const snapshot = await db.collection('comentarios_mundiais').orderBy('data', 'desc').get();
-                const comentarios = [];
-                snapshot.forEach(doc => comentarios.push({ id: doc.id, ...doc.data() }));
-                const container = document.getElementById('worldCommentsList');
-                if (comentarios.length === 0) { 
-                    container.innerHTML = '<div class="no-world-comments">🌍 Seja o primeiro a deixar uma mensagem mundial!</div>'; 
-                    return; 
-                }
-                container.innerHTML = comentarios.map(com => `
-                    <div class="world-comment-item">
-                        <div class="world-comment-header">
-                            <span class="world-comment-author"><i class="fas fa-globe"></i> ${escapeHtml(com.autor || 'Anônimo')}</span>
-                            <span class="world-comment-date">${new Date(com.data).toLocaleDateString('pt-BR')} ${new Date(com.data).toLocaleTimeString('pt-BR')}</span>
-                            ${(usuarioAtual && usuarioAtual.type === 'admin') ? `<button class="delete-world-comment" onclick="excluirComentarioMundial('${com.id}')"><i class="fas fa-trash"></i></button>` : ''}
-                        </div>
-                        <div class="world-comment-text">🌍 ${escapeHtml(com.texto)}</div>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error("Erro ao carregar comentários mundiais:", error);
-                document.getElementById('worldCommentsList').innerHTML = '<div class="no-world-comments">🌍 Erro ao carregar mensagens. Recarregue a página.</div>';
-            }
-        }
-
-        async function enviarComentarioMundial() {
-            const texto = document.getElementById('worldCommentInput').value.trim();
-            let nome = document.getElementById('worldCommentName').value.trim();
-            if (!texto) { alert("Digite uma mensagem mundial!"); return; }
-            if (nome === "") nome = "Anônimo";
-            if (nome.length > 30) nome = nome.substring(0, 30);
-            const comentario = { autor: nome, texto: texto, data: new Date().toISOString() };
-            try {
-                await db.collection('comentarios_mundiais').add(comentario);
-                document.getElementById('worldCommentInput').value = '';
-                document.getElementById('worldCommentName').value = '';
-                await carregarComentariosMundiais();
-                alert("🌍 Mensagem publicada para o mundo!");
-            } catch (error) { alert("Erro ao publicar: " + error.message); }
-        }
-
-        async function excluirComentarioMundial(comentarioId) {
-            if (confirm("Excluir esta mensagem mundial?")) {
-                try {
-                    await db.collection('comentarios_mundiais').doc(comentarioId).delete();
-                    await carregarComentariosMundiais();
-                } catch (error) { alert("Erro ao excluir: " + error.message); }
-            }
-        }
-
-        async function excluirVideo(docId) {
-            if (confirm("Excluir este vídeo?")) {
-                try { await db.collection('videos').doc(docId).delete(); alert('Vídeo excluído!'); carregarVideos(); carregarEstatisticas(); } 
-                catch (error) { alert('Erro ao excluir: ' + error.message); }
-            }
-        }
-
-        async function confirmarExcluirTodos() {
-            fecharConfirmModal();
-            if (!usuarioAtual || usuarioAtual.type !== 'admin') { alert("Apenas admin!"); return; }
-            const snapshot = await db.collection('videos').get();
-            const videos = [];
-            snapshot.forEach(doc => videos.push(doc.id));
-            if (videos.length === 0) { alert("Nenhum vídeo para excluir!"); return; }
-            for (const videoId of videos) { await db.collection('videos').doc(videoId).delete(); }
-            alert(`✅ ${videos.length} vídeos excluídos!`);
-            carregarVideos();
-            carregarEstatisticas();
-            document.getElementById('adminSection').classList.remove('show');
-        }
-
-        async function abrirVideoModal(docId) {
-            videoIdAtual = docId;
-            try {
-                const videoRef = db.collection('videos').doc(docId);
-                const video = await videoRef.get();
-                if (!video.exists) { alert('Vídeo não encontrado!'); return; }
-                const videoData = video.data();
-                const views = (videoData.views || 0) + 1;
-                await videoRef.update({ views: views });
-                document.getElementById('modalVideoTitle').textContent = videoData.title;
-                document.getElementById('modalAuthor').textContent = videoData.author;
-                document.getElementById('modalViews').textContent = views;
-                document.getElementById('modalDescription').textContent = videoData.description;
-                const thumbnailImg = document.getElementById('videoThumbnailImg');
-                const iframe = document.getElementById('videoIframe');
-                const playOverlay = document.getElementById('playOverlay');
-                currentVideoUrl = videoData.url;
-                if (videoData.thumbnail && videoData.thumbnail !== '') {
-                    thumbnailImg.style.display = 'block';
-                    thumbnailImg.src = videoData.thumbnail;
-                    iframe.style.display = 'none';
-                    playOverlay.style.display = 'flex';
-                } else {
-                    thumbnailImg.style.display = 'none';
-                    iframe.style.display = 'block';
-                    iframe.src = videoData.url;
-                    playOverlay.style.display = 'none';
-                }
-                document.getElementById('videoPlayerModal').classList.remove('hidden');
-            } catch (error) { alert('Erro ao carregar vídeo'); }
-        }
-
-        function playVideo() {
-            const thumbnailImg = document.getElementById('videoThumbnailImg');
-            const iframe = document.getElementById('videoIframe');
-            const playOverlay = document.getElementById('playOverlay');
-            thumbnailImg.style.display = 'none';
-            iframe.style.display = 'block';
-            playOverlay.style.display = 'none';
-            iframe.src = currentVideoUrl;
-        }
-
-        function closeVideoModal() {
-            document.getElementById('videoPlayerModal').classList.add('hidden');
-            const iframe = document.getElementById('videoIframe');
-            const thumbnailImg = document.getElementById('videoThumbnailImg');
-            const playOverlay = document.getElementById('playOverlay');
-            iframe.src = ''; thumbnailImg.src = ''; thumbnailImg.style.display = 'block'; iframe.style.display = 'none'; playOverlay.style.display = 'flex';
-            currentVideoUrl = null;
-            videoIdAtual = null;
-        }
-
-        function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
-
-        async function init() {
-            await criarAdmin();
-            const salvo = localStorage.getItem('usuario');
-            if (salvo) {
-                usuarioAtual = JSON.parse(salvo);
-                if (usuarioAtual.type === 'creator' || usuarioAtual.type === 'admin') { document.getElementById('uploadBtn').style.display = 'inline-flex'; }
-                if (usuarioAtual.type === 'admin') { document.getElementById('adminBtn').style.display = 'inline-flex'; }
-                document.querySelectorAll('.nav-buttons button').forEach(btn => { if (btn.id !== 'logoutBtn') btn.style.display = 'none'; });
-                document.getElementById('logoutBtn').style.display = 'inline-flex';
-            }
-            await carregarVideos();
-            await carregarEstatisticas();
-            await carregarComentariosMundiais();
-        }
-        init();
-    </script>
-</body>
-</html>
 
 
 
